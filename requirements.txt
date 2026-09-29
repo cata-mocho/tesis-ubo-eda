@@ -1,9 +1,8 @@
-streamlit>=1.30.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.18.0
-folium>=0.15.0
-streamlit-folium>=0.16.0
-pyarrow>=14.0.0
-openpyxl>=3.1.0
-statsmodels>=0.14.0
+streamlit>=1.36,<2.0
+pandas>=2.0,<3.0
+pyarrow>=14.0
+plotly>=5.18,<7.0
+openpyxl>=3.1
+missingno>=0.5.2
+matplotlib>=3.7
+
