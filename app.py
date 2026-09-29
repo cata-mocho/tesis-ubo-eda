@@ -22,7 +22,7 @@ st.set_page_config(
     page_title="EDA | Matrícula UBO 2015–2025",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
 st.title("Análisis exploratorio de datos — Matrícula UBO")
@@ -136,10 +136,6 @@ else:
 if carreras_sel:
     filtrado = filtrado[filtrado["NOMB_CARRERA"].astype(str).isin(carreras_sel)]
 
-# Colores y formato comunes.
-COLOR_PRINCIPAL = "#64A70B"
-COLOR_SECUNDARIO = "#244A36"
-
 
 def aplicar_estilo(fig, altura=420):
     fig.update_layout(
@@ -157,22 +153,19 @@ def mostrar_sin_datos():
 
 
 # ============================================================
-# NAVEGACIÓN
+# NAVEGACIÓN MEDIANTE PESTAÑAS (TABS)
 # ============================================================
-seccion = st.sidebar.radio(
-    "Secciones",
-    [
-        "1. Integridad de los datos",
-        "2. Perfil demográfico e institucional",
-        "3. Trayectoria escolar y brecha temporal",
-        "4. Vulnerabilidad y territorio",
-    ],
-)
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📋 1. Integridad de los datos",
+    "👥 2. Perfil demográfico e institucional",
+    "🎒 3. Trayectoria escolar y brecha temporal",
+    "📍 4. Vulnerabilidad y territorio"
+])
 
 # ============================================================
-# SECCIÓN 1: DATA HEALTH CHECK
+# PESTAÑA 1: DATA HEALTH CHECK
 # ============================================================
-if seccion == "1. Integridad de los datos":
+with tab1:
     st.header("1. Integridad y diagnóstico de la muestra")
     st.write("Esta sección utiliza la base completa, sin aplicar los filtros demográficos del panel lateral.")
 
@@ -203,7 +196,7 @@ if seccion == "1. Integridad de los datos":
     if msno is not None and plt is not None:
         muestra = df[columnas_presentes].sample(min(3000, len(df)), random_state=42) if len(df) else df[columnas_presentes]
         fig, ax = plt.subplots(figsize=(12, 4))
-        msno.matrix(muestra, ax=ax, sparkline=False, labels=True)
+        msno.matrix(muestra, ax=ax, sparkline=False, labels=True, color=(0.18, 0.45, 0.71))
         plt.tight_layout()
         st.pyplot(fig, clear_figure=True)
         plt.close(fig)
@@ -212,110 +205,202 @@ if seccion == "1. Integridad de los datos":
 
     st.subheader("Registros por año")
     por_anio = df.groupby("CAT_PERIODO", dropna=False).size().reset_index(name="Registros").sort_values("CAT_PERIODO")
-    fig = px.bar(por_anio, x="CAT_PERIODO", y="Registros", text_auto=True, title="Eventos de matrícula por período", color_discrete_sequence=[COLOR_PRINCIPAL])
+    fig = px.bar(
+        por_anio, 
+        x="CAT_PERIODO", 
+        y="Registros", 
+        text_auto=True, 
+        title="Eventos de matrícula por período", 
+        color="Registros",
+        color_continuous_scale="Viridis"
+    )
     st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
 
 # ============================================================
-# SECCIÓN 2: DEMOGRAFÍA E INSTITUCIÓN
+# PESTAÑA 2: DEMOGRAFÍA E INSTITUCIÓN
 # ============================================================
-elif seccion == "2. Perfil demográfico e institucional":
+with tab2:
     st.header("2. Caracterización demográfica e institucional")
     if filtrado.empty:
         mostrar_sin_datos()
-        st.stop()
+    else:
+        st.subheader("Distribución global de género")
+        genero = filtrado["GEN_ALU"].fillna("Sin información").value_counts().rename_axis("Género").reset_index(name="Matrículas")
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = px.pie(
+                genero, 
+                names="Género", 
+                values="Matrículas", 
+                hole=0.45, 
+                title="Proporción por género",
+                color="Género",
+                color_discrete_map={"Hombre": "#2b5c8f", "Mujer": "#e74c3c", "Sin información": "#95a5a6"}
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+        with c2:
+            anual_genero = filtrado.groupby(["CAT_PERIODO", "GEN_ALU"]).size().reset_index(name="Matrículas")
+            fig = px.line(
+                anual_genero, 
+                x="CAT_PERIODO", 
+                y="Matrículas", 
+                color="GEN_ALU", 
+                markers=True, 
+                title="Evolución anual por género",
+                color_discrete_map={"Hombre": "#2b5c8f", "Mujer": "#e74c3c", "Sin información": "#95a5a6"}
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
 
-    st.subheader("Distribución global de género")
-    genero = filtrado["GEN_ALU"].fillna("Sin información").value_counts().rename_axis("Género").reset_index(name="Matrículas")
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = px.pie(genero, names="Género", values="Matrículas", hole=0.45, title="Proporción por género")
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
-    with c2:
-        anual_genero = filtrado.groupby(["CAT_PERIODO", "GEN_ALU"]).size().reset_index(name="Matrículas")
-        fig = px.line(anual_genero, x="CAT_PERIODO", y="Matrículas", color="GEN_ALU", markers=True, title="Evolución anual por género")
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+        st.subheader("Composición por área del conocimiento")
+        area_genero = filtrado.groupby(["AREA_CONOCIMIENTO", "GEN_ALU"]).size().reset_index(name="Matrículas")
+        fig = px.bar(
+            area_genero, 
+            x="AREA_CONOCIMIENTO", 
+            y="Matrículas", 
+            color="GEN_ALU", 
+            barmode="stack", 
+            title="Matrícula por área y género",
+            color_discrete_map={"Hombre": "#2980b9", "Mujer": "#e84393", "Sin información": "#bdc3c7"}
+        )
+        fig.update_xaxes(tickangle=-35)
+        st.plotly_chart(aplicar_estilo(fig, 500), use_container_width=True)
 
-    st.subheader("Composición por área del conocimiento")
-    area_genero = filtrado.groupby(["AREA_CONOCIMIENTO", "GEN_ALU"]).size().reset_index(name="Matrículas")
-    fig = px.bar(area_genero, x="AREA_CONOCIMIENTO", y="Matrículas", color="GEN_ALU", barmode="stack", title="Matrícula por área y género")
-    fig.update_xaxes(tickangle=-35)
-    st.plotly_chart(aplicar_estilo(fig, 500), use_container_width=True)
+        st.subheader("Distribución de rangos etarios")
+        edades = filtrado["RANGO_EDAD"].fillna("Sin información").value_counts().rename_axis("Rango de edad").reset_index(name="Matrículas")
+        fig = px.bar(
+            edades, 
+            x="Rango de edad", 
+            y="Matrículas", 
+            title="Matrículas por rango etario", 
+            color="Matrículas",
+            color_continuous_scale="Plasma",
+            text_auto=True
+        )
+        fig.update_xaxes(categoryorder="total descending", tickangle=-25)
+        st.plotly_chart(aplicar_estilo(fig, 480), use_container_width=True)
 
-    st.subheader("Distribución de rangos etarios")
-    edades = filtrado["RANGO_EDAD"].fillna("Sin información").value_counts().rename_axis("Rango de edad").reset_index(name="Matrículas")
-    fig = px.bar(edades, x="Rango de edad", y="Matrículas", title="Matrículas por rango etario", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=True)
-    fig.update_xaxes(categoryorder="total descending", tickangle=-25)
-    st.plotly_chart(aplicar_estilo(fig, 480), use_container_width=True)
+        st.subheader("Carreras con mayor matrícula acumulada")
+        top_n = st.radio("Cantidad de carreras", [10, 15], horizontal=True, index=0)
+        top_carreras = filtrado["NOMB_CARRERA"].value_counts().head(top_n).sort_values().reset_index()
+        top_carreras.columns = ["Carrera", "Matrículas"]
+        fig = px.bar(
+            top_carreras, 
+            x="Matrículas", 
+            y="Carrera", 
+            orientation="h", 
+            title=f"Top {top_n} carreras", 
+            color="Matrículas",
+            color_continuous_scale="Turbo",
+            text_auto=True
+        )
+        st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
 
-    st.subheader("Carreras con mayor matrícula acumulada")
-    top_n = st.radio("Cantidad de carreras", [10, 15], horizontal=True, index=0)
-    top_carreras = filtrado["NOMB_CARRERA"].value_counts().head(top_n).sort_values().reset_index()
-    top_carreras.columns = ["Carrera", "Matrículas"]
-    fig = px.bar(top_carreras, x="Matrículas", y="Carrera", orientation="h", title=f"Top {top_n} carreras", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=True)
-    st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
-
-    st.subheader("Jornada vespertina y rangos de mayor edad")
-    edad_minima = filtrado["RANGO_EDAD"].astype(str).str.extract(r"(\d{2})", expand=False)
-    edad_minima = pd.to_numeric(edad_minima, errors="coerce")
-    mayores = filtrado[edad_minima >= 25].copy()
-    vespertina = filtrado[filtrado["JORNADA"].astype(str).str.contains("vespert", case=False, na=False)]
-    c1, c2 = st.columns(2)
-    with c1:
-        datos = vespertina["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
-        datos.columns = ["Carrera", "Matrículas vespertinas"]
-        fig = px.bar(datos, x="Matrículas vespertinas", y="Carrera", orientation="h", title="Top 10 carreras: jornada vespertina", color_discrete_sequence=[COLOR_SECUNDARIO])
-        st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
-    with c2:
-        datos = mayores["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
-        datos.columns = ["Carrera", "Matrículas de 25 años o más"]
-        fig = px.bar(datos, x="Matrículas de 25 años o más", y="Carrera", orientation="h", title="Top 10 carreras: edad de ingreso ≥ 25 años", color_discrete_sequence=[COLOR_PRINCIPAL])
-        st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
+        st.subheader("Jornada vespertina y rangos de mayor edad")
+        edad_minima = filtrado["RANGO_EDAD"].astype(str).str.extract(r"(\d{2})", expand=False)
+        edad_minima = pd.to_numeric(edad_minima, errors="coerce")
+        mayores = filtrado[edad_minima >= 25].copy()
+        vespertina = filtrado[filtrado["JORNADA"].astype(str).str.contains("vespert", case=False, na=False)]
+        c1, c2 = st.columns(2)
+        with c1:
+            datos = vespertina["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
+            datos.columns = ["Carrera", "Matrículas vespertinas"]
+            fig = px.bar(
+                datos, 
+                x="Matrículas vespertinas", 
+                y="Carrera", 
+                orientation="h", 
+                title="Top 10 carreras: jornada vespertina", 
+                color="Matrículas vespertinas",
+                color_continuous_scale="Sunset",
+                text_auto=True
+            )
+            st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
+        with c2:
+            datos = mayores["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
+            datos.columns = ["Carrera", "Matrículas de 25 años o más"]
+            fig = px.bar(
+                datos, 
+                x="Matrículas de 25 años o más", 
+                y="Carrera", 
+                orientation="h", 
+                title="Top 10 carreras: edad de ingreso ≥ 25 años", 
+                color="Matrículas de 25 años o más",
+                color_continuous_scale="Tealrose",
+                text_auto=True
+            )
+            st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
 
 # ============================================================
-# SECCIÓN 3: TRAYECTORIA ESCOLAR Y BRECHA TEMPORAL
+# PESTAÑA 3: TRAYECTORIA ESCOLAR Y BRECHA TEMPORAL
 # ============================================================
-elif seccion == "3. Trayectoria escolar y brecha temporal":
+with tab3:
     st.header("3. Trayectoria escolar y brecha temporal")
     datos = filtrado.dropna(subset=["CAT_PERIODO", "ANIO_EGRESO_MEDIA"]).copy()
     datos["BRECHA_TEMPORAL"] = datos["CAT_PERIODO"] - datos["ANIO_EGRESO_MEDIA"]
     if datos.empty:
         mostrar_sin_datos()
-        st.stop()
+    else:
+        brecha = datos["BRECHA_TEMPORAL"]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Brecha promedio", f"{brecha.mean():.2f} años")
+        c2.metric("Mediana", f"{brecha.median():.0f} años")
+        c3.metric("Ingreso 0–1 año", f"{brecha.between(0, 1).mean() * 100:.1f}%")
+        c4.metric("Rezago > 3 años", f"{(brecha > 3).mean() * 100:.1f}%")
 
-    brecha = datos["BRECHA_TEMPORAL"]
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Brecha promedio", f"{brecha.mean():.2f} años")
-    c2.metric("Mediana", f"{brecha.median():.0f} años")
-    c3.metric("Ingreso 0–1 año", f"{brecha.between(0, 1).mean() * 100:.1f}%")
-    c4.metric("Rezago > 3 años", f"{(brecha > 3).mean() * 100:.1f}%")
+        st.caption("Brecha temporal = CAT_PERIODO − ANIO_EGRESO_MEDIA. Los valores negativos se conservan para detectar posibles inconsistencias o casos que requieren revisión.")
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = px.histogram(
+                datos, 
+                x="BRECHA_TEMPORAL", 
+                nbins=30, 
+                title="Distribución de la brecha temporal", 
+                color_discrete_sequence=["#0984e3"]
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+        with c2:
+            fig = px.box(
+                datos, 
+                y="BRECHA_TEMPORAL", 
+                points="outliers", 
+                title="Boxplot de la brecha temporal", 
+                color_discrete_sequence=["#d63031"]
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
 
-    st.caption("Brecha temporal = CAT_PERIODO − ANIO_EGRESO_MEDIA. Los valores negativos se conservan para detectar posibles inconsistencias o casos que requieren revisión.")
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = px.histogram(datos, x="BRECHA_TEMPORAL", nbins=30, title="Distribución de la brecha temporal", color_discrete_sequence=[COLOR_PRINCIPAL])
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
-    with c2:
-        fig = px.box(datos, y="BRECHA_TEMPORAL", points="outliers", title="Boxplot de la brecha temporal", color_discrete_sequence=[COLOR_SECUNDARIO])
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
-
-    st.subheader("Entorno escolar: urbano y rural")
-    rural = datos["RURAL_RBD"].map({0: "Urbano (RURAL_RBD = 0)", 1: "Rural (RURAL_RBD = 1)"}).fillna("Sin información / otro código")
-    distribucion = rural.value_counts().rename_axis("Tipo de entorno").reset_index(name="Matrículas")
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = px.pie(distribucion, names="Tipo de entorno", values="Matrículas", hole=0.4, title="Procedencia según entorno escolar")
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
-    with c2:
-        datos["ENTORNO_ESCOLAR"] = rural
-        resumen = datos.groupby("ENTORNO_ESCOLAR")["BRECHA_TEMPORAL"].agg(Mediana="median", Promedio="mean", Registros="count").reset_index()
-        fig = px.bar(resumen, x="ENTORNO_ESCOLAR", y="Promedio", title="Brecha promedio según entorno escolar", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=".2f")
-        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
-    st.dataframe(resumen, use_container_width=True, hide_index=True)
+        st.subheader("Entorno escolar: urbano y rural")
+        rural = datos["RURAL_RBD"].map({0: "Urbano (RURAL_RBD = 0)", 1: "Rural (RURAL_RBD = 1)"}).fillna("Sin información / otro código")
+        distribucion = rural.value_counts().rename_axis("Tipo de entorno").reset_index(name="Matrículas")
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = px.pie(
+                distribucion, 
+                names="Tipo de entorno", 
+                values="Matrículas", 
+                hole=0.4, 
+                title="Procedencia según entorno escolar",
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+        with c2:
+            datos["ENTORNO_ESCOLAR"] = rural
+            resumen = datos.groupby("ENTORNO_ESCOLAR")["BRECHA_TEMPORAL"].agg(Mediana="median", Promedio="mean", Registros="count").reset_index()
+            fig = px.bar(
+                resumen, 
+                x="ENTORNO_ESCOLAR", 
+                y="Promedio", 
+                title="Brecha promedio según entorno escolar", 
+                color="ENTORNO_ESCOLAR",
+                color_discrete_sequence=px.colors.qualitative.Bold, 
+                text_auto=".2f"
+            )
+            st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+        st.dataframe(resumen, use_container_width=True, hide_index=True)
 
 # ============================================================
-# SECCIÓN 4: VULNERABILIDAD Y TERRITORIO
-# =================================================n
-else:
+# PESTAÑA 4: VULNERABILIDAD Y TERRITORIO
+# ============================================================
+with tab4:
     st.header("4. Vulnerabilidad y contexto territorial")
     st.subheader("Índice de Vulnerabilidad Multidimensional (IVM_REGION)")
     ivm = filtrado.dropna(subset=["IVM_REGION"]).copy()
@@ -327,7 +412,15 @@ else:
             Mínimo="min", P25=lambda x: x.quantile(0.25), P75=lambda x: x.quantile(0.75), Máximo="max"
         ).reset_index().sort_values("Media", ascending=False)
         st.dataframe(resumen_ivm.style.format({c: "{:.2f}" for c in ["Media", "Mediana", "Desviación_estándar", "Mínimo", "P25", "P75", "Máximo"]}), use_container_width=True, hide_index=True)
-        fig = px.box(ivm, x="NOM_REG_RBD_A", y="IVM_REGION", points=False, title="Distribución de IVM_REGION por región", color_discrete_sequence=[COLOR_PRINCIPAL])
+        fig = px.box(
+            ivm, 
+            x="NOM_REG_RBD_A", 
+            y="IVM_REGION", 
+            points=False, 
+            title="Distribución de IVM_REGION por región", 
+            color="NOM_REG_RBD_A",
+            color_discrete_sequence=px.colors.qualitative.Prism
+        )
         fig.update_xaxes(tickangle=-30)
         st.plotly_chart(aplicar_estilo(fig, 500), use_container_width=True)
 
@@ -336,12 +429,30 @@ else:
     with c1:
         comunas = filtrado["NOM_COM_RBD"].fillna("Sin información").value_counts().head(15).sort_values().reset_index()
         comunas.columns = ["Comuna", "Matrículas"]
-        fig = px.bar(comunas, x="Matrículas", y="Comuna", orientation="h", title="Top 15 comunas", color_discrete_sequence=[COLOR_PRINCIPAL])
+        fig = px.bar(
+            comunas, 
+            x="Matrículas", 
+            y="Comuna", 
+            orientation="h", 
+            title="Top 15 comunas", 
+            color="Matrículas",
+            color_continuous_scale="Spectral",
+            text_auto=True
+        )
         st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
     with c2:
         provincias = filtrado["NOM_DEPROV_RBD"].fillna("Sin información").value_counts().head(15).sort_values().reset_index()
         provincias.columns = ["Provincia / DEPROV", "Matrículas"]
-        fig = px.bar(provincias, x="Matrículas", y="Provincia / DEPROV", orientation="h", title="Top 15 provincias / DEPROV", color_discrete_sequence=[COLOR_SECUNDARIO])
+        fig = px.bar(
+            provincias, 
+            x="Matrículas", 
+            y="Provincia / DEPROV", 
+            orientation="h", 
+            title="Top 15 provincias / DEPROV", 
+            color="Matrículas",
+            color_continuous_scale="Viridis",
+            text_auto=True
+        )
         st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
 
     st.subheader("Densidad geográfica de establecimientos escolares")
@@ -355,7 +466,6 @@ else:
     if mapa.empty:
         st.info("No existen coordenadas válidas para mostrar con los filtros seleccionados.")
     else:
-        # Muestreo para mantener ágil la visualización en Streamlit Cloud.
         if len(mapa) > 15000:
             mapa = mapa.sample(15000, random_state=42)
         fig = px.density_mapbox(
@@ -363,6 +473,7 @@ else:
             center={"lat": -33.45, "lon": -70.66} if opcion_mapa == "Región Metropolitana" else {"lat": -35.5, "lon": -71.0},
             zoom=7 if opcion_mapa == "Región Metropolitana" else 3.2,
             mapbox_style="open-street-map",
+            color_continuous_scale="Rainbow",
             hover_name="NOM_RBD",
             hover_data={"NOM_COM_RBD": True, "NOM_REG_RBD_A": True, "LATITUD": ":.4f", "LONGITUD": ":.4f"},
             title=f"Densidad de colegios de procedencia — {opcion_mapa}",
