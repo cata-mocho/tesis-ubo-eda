@@ -1,240 +1,378 @@
-import streamlit as st
+from pathlib import Path
+import re
+
 import pandas as pd
-import numpy as np
+import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-import folium
-from folium.plugins import HeatMap, MarkerCluster
-from streamlit_folium import st_folium
 
-# Configuración de la página
+# missingno se utiliza para la matriz de integridad de la muestra.
+try:
+    import missingno as msno
+    import matplotlib.pyplot as plt
+except ImportError:
+    msno = None
+    plt = None
+
+
+# ============================================================
+# CONFIGURACIÓN GENERAL
+# ============================================================
 st.set_page_config(
-    page_title="EDA Tesis UBO - Retención y Vulnerabilidad",
-    page_icon="🎓",
+    page_title="EDA | Matrícula UBO 2015–2025",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# -------------------------------------------------------------
-# CARGA DE DATOS OPTIMIZADA (CACHE)
-# -------------------------------------------------------------
-@st.cache_data
-def cargar_datos():
-    # Cargar parquet o excel consolidado
-    try:
-        df = pd.read_parquet("data/Tablon_Maestro_Tesis_UBO.parquet")
-    except Exception:
-        df = pd.read_excel("data/Tablon_Maestro_Tesis_UBO.xlsx")
-        
-    df.columns = df.columns.str.strip().str.upper()
-    
-    # Coordenadas limpias
-    if 'LATITUD' in df.columns and 'LONGITUD' in df.columns:
-        df['LATITUD'] = pd.to_numeric(df['LATITUD'].astype(str).str.replace(',', '.'), errors='coerce')
-        df['LONGITUD'] = pd.to_numeric(df['LONGITUD'].astype(str).str.replace(',', '.'), errors='coerce')
-        
+st.title("Análisis exploratorio de datos — Matrícula UBO")
+st.caption("Caracterización demográfica, trayectoria escolar y contexto territorial · 2015–2025")
+
+COLUMNAS_ESPERADAS = [
+    "MRUN", "CAT_PERIODO", "GEN_ALU", "JORNADA", "RANGO_EDAD",
+    "NOMB_CARRERA", "AREA_CONOCIMIENTO", "ANIO_EGRESO_MEDIA", "RBD",
+    "NOM_REG_RBD_A", "NOM_COM_RBD", "NOM_DEPROV_RBD", "LATITUD",
+    "LONGITUD", "NOM_RBD", "RURAL_RBD", "IVM_REGION",
+]
+COLUMNAS_ESCOLARES = [
+    "RBD", "IVM_REGION", "LATITUD", "LONGITUD", "NOM_RBD",
+    "NOM_COM_RBD", "NOM_DEPROV_RBD", "RURAL_RBD",
+]
+
+
+# ============================================================
+# CARGA DE DATOS
+# ============================================================
+def buscar_parquet():
+    """Busca un parquet en data/ o en la raíz del repositorio."""
+    candidatos = sorted(Path("data").glob("*.parquet")) if Path("data").exists() else []
+    candidatos += sorted(Path(".").glob("*.parquet"))
+    return candidatos[0] if candidatos else None
+
+
+@st.cache_data(show_spinner="Leyendo archivo Parquet...")
+def cargar_parquet(ruta: str) -> pd.DataFrame:
+    return pd.read_parquet(ruta, engine="pyarrow")
+
+
+def limpiar_nombres_columnas(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = [str(c).replace("\xa0", " ").strip() for c in df.columns]
     return df
 
-try:
-    df = cargar_datos()
-except Exception as e:
-    st.error(f"Error al cargar los datos: {e}. Asegúrate de ubicar el archivo en la carpeta 'data/'.")
+
+ruta_parquet = buscar_parquet()
+
+with st.sidebar:
+    st.header("Fuente de datos")
+    archivo_subido = st.file_uploader("Cargar un archivo .parquet", type=["parquet"])
+    st.caption("Si no cargas un archivo aquí, la aplicación buscará uno en data/ o en la raíz del repositorio.")
+
+if archivo_subido is not None:
+    try:
+        df = pd.read_parquet(archivo_subido, engine="pyarrow")
+        fuente = archivo_subido.name
+    except Exception as exc:
+        st.error(f"No se pudo leer el archivo Parquet: {exc}")
+        st.stop()
+elif ruta_parquet is not None:
+    try:
+        df = cargar_parquet(str(ruta_parquet))
+        fuente = str(ruta_parquet)
+    except Exception as exc:
+        st.error(f"No se pudo leer {ruta_parquet}: {exc}")
+        st.stop()
+else:
+    st.warning("No se encontró ningún archivo .parquet. Guarda tu base en data/ o súbela desde el panel lateral.")
+    st.code("tesis-ubo-eda/\n├── app.py\n├── requirements.txt\n└── data/\n    └── Tablon_Descriptivo_UBO_79026.parquet")
     st.stop()
 
-# -------------------------------------------------------------
-# SIDEBAR: FILTROS INTERACTIVOS
-# -------------------------------------------------------------
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Logo_UBO.png/320px-Logo_UBO.png", width=180)
-st.sidebar.title("Filtros del Panel")
+# Normalizar nombres y tipos sin modificar el archivo original.
+df = limpiar_nombres_columnas(df)
+for col in ["CAT_PERIODO", "ANIO_EGRESO_MEDIA", "RURAL_RBD", "LATITUD", "LONGITUD", "IVM_REGION"]:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Filtro por Cohorte/Año de Matrícula
-col_anio = [c for c in df.columns if 'ANIO_MATRICULA' in c or 'ANIO_CENSO' in c]
-if col_anio:
-    anios_disp = sorted(df[col_anio[0]].dropna().unique().astype(int))
-    anios_sel = st.sidebar.multiselect("Año de Matrícula:", anios_disp, default=anios_disp)
-    df_filtrado = df[df[col_anio[0]].isin(anios_sel)].copy()
-else:
-    df_filtrado = df.copy()
+faltan = [c for c in COLUMNAS_ESPERADAS if c not in df.columns]
+if faltan:
+    st.error("El archivo no contiene todas las columnas esperadas por este dashboard.")
+    st.write("Columnas faltantes:", faltan)
+    st.write("Columnas encontradas:", df.columns.tolist())
+    st.stop()
 
-# Filtro por Carrera
-col_carr = [c for c in df.columns if 'CARRERA' in c]
-if col_carr:
-    carreras_disp = sorted(df_filtrado[col_carr[0]].dropna().unique().astype(str))
-    carreras_sel = st.sidebar.multiselect("Carrera:", carreras_disp, default=[])
-    if carreras_sel:
-        df_filtrado = df_filtrado[df_filtrado[col_carr[0]].isin(carreras_sel)]
+st.sidebar.success(f"Fuente cargada: {fuente}")
+st.sidebar.metric("Registros disponibles", f"{len(df):,}".replace(",", "."))
 
-# -------------------------------------------------------------
-# CABECERA Y METRICAS PRINCIPALES (KPIS)
-# -------------------------------------------------------------
-st.title("🎓 Análisis Exploratorio de Datos (EDA) - Matrícula y Trayectoria UBO")
-st.markdown("Visualización exploratoria de la población estudiantil, origen geoespacial y dimensiones de vulnerabilidad escolar (IVE / IVM).")
-
-m1, m2, m3, m4 = st.columns(4)
-total_est = len(df_filtrado)
-m1.metric("Total Estudiantes", f"{total_est:,}")
-
-col_ret = [c for c in df_filtrado.columns if 'RETIENE' in c or 'RETENCION' in c]
-if col_ret:
-    tasa_ret = (df_filtrado[col_ret[0]] == 1).sum() / total_est * 100 if total_est > 0 else 0
-    m2.metric("Tasa de Retención (1er Año)", f"{tasa_ret:.1f}%")
-else:
-    m2.metric("Tasa de Retención", "N/D")
-
-col_rbd = [c for c in df_filtrado.columns if 'RBD' in c and 'NOM' not in c and 'COD' not in c]
-if col_rbd:
-    n_colegios = df_filtrado[col_rbd[0]].nunique()
-    m3.metric("Colegios de Origen (RBD)", f"{n_colegios:,}")
-
-if 'DISTANCIA_CAMPUS_KM' in df_filtrado.columns:
-    dist_media = df_filtrado['DISTANCIA_CAMPUS_KM'].median()
-    m4.metric("Distancia Mediana al Campus", f"{dist_media:.1f} km")
-
-st.markdown("---")
-
-# -------------------------------------------------------------
-# SECCIÓN 1: DEMOGRAFÍA Y PERFIL ACADÉMICO
-# -------------------------------------------------------------
-st.subheader("1. Perfil Demográfico e Institucional")
-tab1, tab2 = st.tabs(["Distribuciones Generales", "Composición de Carreras"])
-
-with tab1:
-    col_g1, col_g2 = st.columns(2)
-    
-    # Gráfico de Torta: Género
-    col_gen = [c for c in df_filtrado.columns if 'GEN' in c or 'SEXO' in c]
-    if col_gen:
-        with col_g1:
-            fig_gen = px.pie(
-                df_filtrado, 
-                names=col_gen[0], 
-                title="Distribución por Género",
-                hole=0.45,
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            st.plotly_chart(fig_gen, use_container_width=True)
-            
-    # Gráfico de Barras: Rango de Edad
-    col_edad = [c for c in df_filtrado.columns if 'EDAD' in c]
-    if col_edad:
-        with col_g2:
-            conteo_edad = df_filtrado[col_edad[0]].value_counts().reset_index()
-            conteo_edad.columns = ['Rango', 'Cantidad']
-            fig_edad = px.bar(
-                conteo_edad, 
-                x='Cantidad', 
-                y='Rango', 
-                orientation='h',
-                title="Distribución por Rango de Edad",
-                color='Cantidad',
-                color_continuous_scale='Blues'
-            )
-            st.plotly_chart(fig_edad, use_container_width=True)
-
-with tab2:
-    col_c1, col_c2 = st.columns(2)
-    
-    # Top 15 Carreras por Matrícula
-    if col_carr:
-        with col_c1:
-            top_carr = df_filtrado[col_carr[0]].value_counts().head(15).reset_index()
-            top_carr.columns = ['Carrera', 'Estudiantes']
-            fig_carr = px.bar(
-                top_carr, 
-                x='Estudiantes', 
-                y='Carrera', 
-                orientation='h',
-                title="Top 15 Carreras con Mayor Matrícula",
-                color='Estudiantes',
-                color_continuous_scale='Teal'
-            )
-            fig_carr.update_layout(yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig_carr, use_container_width=True)
-            
-    # Gráfico de Torta: Vía de Admisión / Forma de Ingreso
-    col_ing = [c for c in df_filtrado.columns if 'INGRESO' in c or 'VIA' in c]
-    if col_ing:
-        with col_c2:
-            fig_ing = px.pie(
-                df_filtrado, 
-                names=col_ing[0], 
-                title="Distribución según Vía de Admisión",
-                hole=0.35,
-                color_discrete_sequence=px.colors.qualitative.Pastel
-            )
-            st.plotly_chart(fig_ing, use_container_width=True)
-
-st.markdown("---")
-
-# -------------------------------------------------------------
-# SECCIÓN 2: MAPA DE CALOR GEOESPACIAL Y DENSIDAD
-# -------------------------------------------------------------
-st.subheader("2. Distribución Geoespacial y Densidad de Procedencia")
-st.markdown("Concentración territorial de los colegios de educación media desde donde ingresaron los estudiantes a la UBO.")
-
-if 'LATITUD' in df_filtrado.columns and 'LONGITUD' in df_filtrado.columns:
-    df_geo = df_filtrado.dropna(subset=['LATITUD', 'LONGITUD']).copy()
-    # Filtrar coordenadas válidas en Chile
-    df_geo = df_geo[(df_geo['LATITUD'] >= -56) & (df_geo['LATITUD'] <= -17) & 
-                    (df_geo['LONGITUD'] >= -76) & (df_geo['LONGITUD'] <= -66)]
-    
-    if not df_geo.empty:
-        col_mapa, col_tabla_geo = st.columns([1.6, 1])
-        
-        with col_mapa:
-            # Agrupar por colegio para el mapa
-            col_nom_c = [c for c in df_geo.columns if 'NOM_RBD' in c or 'NOMBRE_ESTABLE' in c]
-            nom_c_col = col_nom_c[0] if col_nom_c else col_rbd[0]
-            
-            colegios_agg = df_geo.groupby([col_rbd[0], nom_c_col, 'LATITUD', 'LONGITUD']).size().reset_index(name='TOTAL_ALUMNOS')
-            
-            # Crear mapa Folium centrado en Santiago
-            m = folium.Map(location=[-33.4569, -70.6631], zoom_start=10, tiles='CartoDB positron')
-            
-            # Capa 1: HeatMap (Densidad)
-            heat_data = [[row['LATITUD'], row['LONGITUD'], row['TOTAL_ALUMNOS']] for _, row in colegios_agg.iterrows()]
-            HeatMap(heat_data, radius=12, blur=15, max_zoom=13).add_to(m)
-            
-            # Capa 2: Marcadores Clusterizados
-            cluster = MarkerCluster(name="Colegios").add_to(m)
-            for _, r in colegios_agg.head(500).iterrows(): # Renderizar top 500 para agilidad
-                folium.CircleMarker(
-                    location=[r['LATITUD'], r['LONGITUD']],
-                    radius=4 + min(r['TOTAL_ALUMNOS'], 10),
-                    popup=f"<b>RBD:</b> {int(r[col_rbd[0]])}<br><b>Colegio:</b> {r[nom_c_col]}<br><b>Alumnos:</b> {r['TOTAL_ALUMNOS']}",
-                    color="#1f77b4",
-                    fill=True,
-                    fill_opacity=0.6
-                ).add_to(cluster)
-                
-            st_folium(m, width="100%", height=480)
-            
-        with col_tabla_geo:
-            col_comuna = [c for c in df_geo.columns if 'NOM_COM' in c or 'COMUNA' in c]
-            if col_comuna:
-                st.write("**Top Comunas de Procedencia**")
-                tabla_com = df_geo[col_comuna[0]].value_counts().reset_index()
-                tabla_com.columns = ['Comuna', 'Estudiantes']
-                tabla_com['% del Total'] = (tabla_com['Estudiantes'] / len(df_geo) * 100).map("{:.2f}%".format)
-                st.dataframe(tabla_com.head(15), use_container_width=True, height=430)
+# ============================================================
+# FILTROS GLOBALES
+# ============================================================
+with st.sidebar:
+    st.divider()
+    st.header("Filtros del dashboard")
+    anios = sorted(df["CAT_PERIODO"].dropna().astype(int).unique().tolist())
+    if anios:
+        rango_anios = st.slider("Período de matrícula", min_value=int(min(anios)), max_value=int(max(anios)), value=(int(min(anios)), int(max(anios))))
     else:
-        st.info("No se encontraron registros con coordenadas válidas para los filtros aplicados.")
+        rango_anios = (0, 9999)
+
+    areas = sorted(df["AREA_CONOCIMIENTO"].dropna().astype(str).unique().tolist())
+    areas_sel = st.multiselect("Área del conocimiento", areas, default=areas)
+
+    generos = sorted(df["GEN_ALU"].dropna().astype(str).unique().tolist())
+    generos_sel = st.multiselect("Género", generos, default=generos)
+
+    carreras = sorted(df["NOMB_CARRERA"].dropna().astype(str).unique().tolist())
+    carreras_sel = st.multiselect("Carrera (opcional)", carreras, default=[])
+
+filtrado = df[df["CAT_PERIODO"].between(rango_anios[0], rango_anios[1], inclusive="both")].copy()
+if areas_sel:
+    filtrado = filtrado[filtrado["AREA_CONOCIMIENTO"].astype(str).isin(areas_sel)]
 else:
-    st.warning("El dataset no contiene las columnas LATITUD y LONGITUD.")
+    filtrado = filtrado.iloc[0:0]
+if generos_sel:
+    filtrado = filtrado[filtrado["GEN_ALU"].astype(str).isin(generos_sel)]
+else:
+    filtrado = filtrado.iloc[0:0]
+if carreras_sel:
+    filtrado = filtrado[filtrado["NOMB_CARRERA"].astype(str).isin(carreras_sel)]
 
-st.markdown("---")
+# Colores y formato comunes.
+COLOR_PRINCIPAL = "#64A70B"
+COLOR_SECUNDARIO = "#244A36"
 
-# -------------------------------------------------------------
-# SECCIÓN 3: TABLA DE DATOS DETALLADA Y DESCARGA
-# -------------------------------------------------------------
-st.subheader("3. Explorador de Datos y Exportación")
-with st.expander("Ver tabla completa de datos"):
-    st.dataframe(df_filtrado.head(100), use_container_width=True)
-    
-    csv = df_filtrado.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Descargar datos filtrados (CSV)",
-        data=csv,
-        file_name="Datos_Filtrados_EDA_UBO.csv",
-        mime="text/csv"
+
+def aplicar_estilo(fig, altura=420):
+    fig.update_layout(
+        height=altura,
+        template="plotly_white",
+        margin=dict(l=20, r=20, t=55, b=20),
+        font=dict(family="Arial", size=12),
+        legend_title_text="",
     )
+    return fig
+
+
+def mostrar_sin_datos():
+    st.info("No hay registros para los filtros seleccionados. Modifica los filtros del panel lateral.")
+
+
+# ============================================================
+# NAVEGACIÓN
+# ============================================================
+seccion = st.sidebar.radio(
+    "Secciones",
+    [
+        "1. Integridad de los datos",
+        "2. Perfil demográfico e institucional",
+        "3. Trayectoria escolar y brecha temporal",
+        "4. Vulnerabilidad y territorio",
+    ],
+)
+
+# ============================================================
+# SECCIÓN 1: DATA HEALTH CHECK
+# ============================================================
+if seccion == "1. Integridad de los datos":
+    st.header("1. Integridad y diagnóstico de la muestra")
+    st.write("Esta sección utiliza la base completa, sin aplicar los filtros demográficos del panel lateral.")
+
+    n_registros = len(df)
+    n_estudiantes = df["MRUN"].nunique(dropna=True)
+    n_periodos = df["CAT_PERIODO"].nunique(dropna=True)
+    n_sin_mrun = int(df["MRUN"].isna().sum())
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Eventos de matrícula", f"{n_registros:,}".replace(",", "."))
+    c2.metric("Estudiantes únicos (MRUN)", f"{n_estudiantes:,}".replace(",", "."))
+    c3.metric("Períodos distintos", n_periodos)
+    c4.metric("MRUN faltantes", n_sin_mrun)
+
+    if n_registros != 79026:
+        st.info(f"La base cargada contiene {n_registros:,} registros. El valor de referencia indicado para la tesis es 79.026; verifica que hayas cargado el archivo completo.".replace(",", "."))
+
+    st.subheader("Cobertura de variables y valores faltantes")
+    faltantes = pd.DataFrame({
+        "Variable": df.columns,
+        "Valores faltantes": [int(df[c].isna().sum()) for c in df.columns],
+        "% faltante": [float(df[c].isna().mean() * 100) for c in df.columns],
+    }).sort_values("% faltante", ascending=False)
+    st.dataframe(faltantes.style.format({"% faltante": "{:.2f}%"}), use_container_width=True, hide_index=True)
+
+    st.subheader("Matriz de valores faltantes — variables escolares")
+    columnas_presentes = [c for c in COLUMNAS_ESCOLARES if c in df.columns]
+    if msno is not None and plt is not None:
+        muestra = df[columnas_presentes].sample(min(3000, len(df)), random_state=42) if len(df) else df[columnas_presentes]
+        fig, ax = plt.subplots(figsize=(12, 4))
+        msno.matrix(muestra, ax=ax, sparkline=False, labels=True)
+        plt.tight_layout()
+        st.pyplot(fig, clear_figure=True)
+        plt.close(fig)
+    else:
+        st.warning("No está instalada la librería missingno. Instala las dependencias de requirements.txt para mostrar esta matriz.")
+
+    st.subheader("Registros por año")
+    por_anio = df.groupby("CAT_PERIODO", dropna=False).size().reset_index(name="Registros").sort_values("CAT_PERIODO")
+    fig = px.bar(por_anio, x="CAT_PERIODO", y="Registros", text_auto=True, title="Eventos de matrícula por período", color_discrete_sequence=[COLOR_PRINCIPAL])
+    st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+
+# ============================================================
+# SECCIÓN 2: DEMOGRAFÍA E INSTITUCIÓN
+# ============================================================
+elif seccion == "2. Perfil demográfico e institucional":
+    st.header("2. Caracterización demográfica e institucional")
+    if filtrado.empty:
+        mostrar_sin_datos()
+        st.stop()
+
+    st.subheader("Distribución global de género")
+    genero = filtrado["GEN_ALU"].fillna("Sin información").value_counts().rename_axis("Género").reset_index(name="Matrículas")
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = px.pie(genero, names="Género", values="Matrículas", hole=0.45, title="Proporción por género")
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+    with c2:
+        anual_genero = filtrado.groupby(["CAT_PERIODO", "GEN_ALU"]).size().reset_index(name="Matrículas")
+        fig = px.line(anual_genero, x="CAT_PERIODO", y="Matrículas", color="GEN_ALU", markers=True, title="Evolución anual por género")
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+
+    st.subheader("Composición por área del conocimiento")
+    area_genero = filtrado.groupby(["AREA_CONOCIMIENTO", "GEN_ALU"]).size().reset_index(name="Matrículas")
+    fig = px.bar(area_genero, x="AREA_CONOCIMIENTO", y="Matrículas", color="GEN_ALU", barmode="stack", title="Matrícula por área y género")
+    fig.update_xaxes(tickangle=-35)
+    st.plotly_chart(aplicar_estilo(fig, 500), use_container_width=True)
+
+    st.subheader("Distribución de rangos etarios")
+    edades = filtrado["RANGO_EDAD"].fillna("Sin información").value_counts().rename_axis("Rango de edad").reset_index(name="Matrículas")
+    fig = px.bar(edades, x="Rango de edad", y="Matrículas", title="Matrículas por rango etario", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=True)
+    fig.update_xaxes(categoryorder="total descending", tickangle=-25)
+    st.plotly_chart(aplicar_estilo(fig, 480), use_container_width=True)
+
+    st.subheader("Carreras con mayor matrícula acumulada")
+    top_n = st.radio("Cantidad de carreras", [10, 15], horizontal=True, index=0)
+    top_carreras = filtrado["NOMB_CARRERA"].value_counts().head(top_n).sort_values().reset_index()
+    top_carreras.columns = ["Carrera", "Matrículas"]
+    fig = px.bar(top_carreras, x="Matrículas", y="Carrera", orientation="h", title=f"Top {top_n} carreras", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=True)
+    st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
+
+    st.subheader("Jornada vespertina y rangos de mayor edad")
+    edad_minima = filtrado["RANGO_EDAD"].astype(str).str.extract(r"(\d{2})", expand=False)
+    edad_minima = pd.to_numeric(edad_minima, errors="coerce")
+    mayores = filtrado[edad_minima >= 25].copy()
+    vespertina = filtrado[filtrado["JORNADA"].astype(str).str.contains("vespert", case=False, na=False)]
+    c1, c2 = st.columns(2)
+    with c1:
+        datos = vespertina["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
+        datos.columns = ["Carrera", "Matrículas vespertinas"]
+        fig = px.bar(datos, x="Matrículas vespertinas", y="Carrera", orientation="h", title="Top 10 carreras: jornada vespertina", color_discrete_sequence=[COLOR_SECUNDARIO])
+        st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
+    with c2:
+        datos = mayores["NOMB_CARRERA"].value_counts().head(10).sort_values().reset_index()
+        datos.columns = ["Carrera", "Matrículas de 25 años o más"]
+        fig = px.bar(datos, x="Matrículas de 25 años o más", y="Carrera", orientation="h", title="Top 10 carreras: edad de ingreso ≥ 25 años", color_discrete_sequence=[COLOR_PRINCIPAL])
+        st.plotly_chart(aplicar_estilo(fig, 460), use_container_width=True)
+
+# ============================================================
+# SECCIÓN 3: TRAYECTORIA ESCOLAR Y BRECHA TEMPORAL
+# ============================================================
+elif seccion == "3. Trayectoria escolar y brecha temporal":
+    st.header("3. Trayectoria escolar y brecha temporal")
+    datos = filtrado.dropna(subset=["CAT_PERIODO", "ANIO_EGRESO_MEDIA"]).copy()
+    datos["BRECHA_TEMPORAL"] = datos["CAT_PERIODO"] - datos["ANIO_EGRESO_MEDIA"]
+    if datos.empty:
+        mostrar_sin_datos()
+        st.stop()
+
+    brecha = datos["BRECHA_TEMPORAL"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Brecha promedio", f"{brecha.mean():.2f} años")
+    c2.metric("Mediana", f"{brecha.median():.0f} años")
+    c3.metric("Ingreso 0–1 año", f"{brecha.between(0, 1).mean() * 100:.1f}%")
+    c4.metric("Rezago > 3 años", f"{(brecha > 3).mean() * 100:.1f}%")
+
+    st.caption("Brecha temporal = CAT_PERIODO − ANIO_EGRESO_MEDIA. Los valores negativos se conservan para detectar posibles inconsistencias o casos que requieren revisión.")
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = px.histogram(datos, x="BRECHA_TEMPORAL", nbins=30, title="Distribución de la brecha temporal", color_discrete_sequence=[COLOR_PRINCIPAL])
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+    with c2:
+        fig = px.box(datos, y="BRECHA_TEMPORAL", points="outliers", title="Boxplot de la brecha temporal", color_discrete_sequence=[COLOR_SECUNDARIO])
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+
+    st.subheader("Entorno escolar: urbano y rural")
+    rural = datos["RURAL_RBD"].map({0: "Urbano (RURAL_RBD = 0)", 1: "Rural (RURAL_RBD = 1)"}).fillna("Sin información / otro código")
+    distribucion = rural.value_counts().rename_axis("Tipo de entorno").reset_index(name="Matrículas")
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = px.pie(distribucion, names="Tipo de entorno", values="Matrículas", hole=0.4, title="Procedencia según entorno escolar")
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+    with c2:
+        datos["ENTORNO_ESCOLAR"] = rural
+        resumen = datos.groupby("ENTORNO_ESCOLAR")["BRECHA_TEMPORAL"].agg(Mediana="median", Promedio="mean", Registros="count").reset_index()
+        fig = px.bar(resumen, x="ENTORNO_ESCOLAR", y="Promedio", title="Brecha promedio según entorno escolar", color_discrete_sequence=[COLOR_PRINCIPAL], text_auto=".2f")
+        st.plotly_chart(aplicar_estilo(fig), use_container_width=True)
+    st.dataframe(resumen, use_container_width=True, hide_index=True)
+
+# ============================================================
+# SECCIÓN 4: VULNERABILIDAD Y TERRITORIO
+# =================================================n
+else:
+    st.header("4. Vulnerabilidad y contexto territorial")
+    st.subheader("Índice de Vulnerabilidad Multidimensional (IVM_REGION)")
+    ivm = filtrado.dropna(subset=["IVM_REGION"]).copy()
+    if ivm.empty:
+        st.warning("No hay valores de IVM_REGION para los filtros seleccionados.")
+    else:
+        resumen_ivm = ivm.groupby("NOM_REG_RBD_A")["IVM_REGION"].agg(
+            Registros="count", Media="mean", Mediana="median", Desviación_estándar="std",
+            Mínimo="min", P25=lambda x: x.quantile(0.25), P75=lambda x: x.quantile(0.75), Máximo="max"
+        ).reset_index().sort_values("Media", ascending=False)
+        st.dataframe(resumen_ivm.style.format({c: "{:.2f}" for c in ["Media", "Mediana", "Desviación_estándar", "Mínimo", "P25", "P75", "Máximo"]}), use_container_width=True, hide_index=True)
+        fig = px.box(ivm, x="NOM_REG_RBD_A", y="IVM_REGION", points=False, title="Distribución de IVM_REGION por región", color_discrete_sequence=[COLOR_PRINCIPAL])
+        fig.update_xaxes(tickangle=-30)
+        st.plotly_chart(aplicar_estilo(fig, 500), use_container_width=True)
+
+    st.subheader("Comunas y provincias de procedencia")
+    c1, c2 = st.columns(2)
+    with c1:
+        comunas = filtrado["NOM_COM_RBD"].fillna("Sin información").value_counts().head(15).sort_values().reset_index()
+        comunas.columns = ["Comuna", "Matrículas"]
+        fig = px.bar(comunas, x="Matrículas", y="Comuna", orientation="h", title="Top 15 comunas", color_discrete_sequence=[COLOR_PRINCIPAL])
+        st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
+    with c2:
+        provincias = filtrado["NOM_DEPROV_RBD"].fillna("Sin información").value_counts().head(15).sort_values().reset_index()
+        provincias.columns = ["Provincia / DEPROV", "Matrículas"]
+        fig = px.bar(provincias, x="Matrículas", y="Provincia / DEPROV", orientation="h", title="Top 15 provincias / DEPROV", color_discrete_sequence=[COLOR_SECUNDARIO])
+        st.plotly_chart(aplicar_estilo(fig, 520), use_container_width=True)
+
+    st.subheader("Densidad geográfica de establecimientos escolares")
+    opcion_mapa = st.radio("Cobertura del mapa", ["Todo Chile", "Región Metropolitana"], horizontal=True)
+    mapa = filtrado.dropna(subset=["LATITUD", "LONGITUD"]).copy()
+    # Excluir coordenadas fuera de rangos geográficos válidos.
+    mapa = mapa[mapa["LATITUD"].between(-57, -17) & mapa["LONGITUD"].between(-76, -66)]
+    if opcion_mapa == "Región Metropolitana":
+        mapa = mapa[mapa["NOM_REG_RBD_A"].astype(str).str.contains(r"\bRM\b|METROPOLITANA", case=False, na=False, regex=True)]
+
+    if mapa.empty:
+        st.info("No existen coordenadas válidas para mostrar con los filtros seleccionados.")
+    else:
+        # Muestreo para mantener ágil la visualización en Streamlit Cloud.
+        if len(mapa) > 15000:
+            mapa = mapa.sample(15000, random_state=42)
+        fig = px.density_mapbox(
+            mapa, lat="LATITUD", lon="LONGITUD", radius=10,
+            center={"lat": -33.45, "lon": -70.66} if opcion_mapa == "Región Metropolitana" else {"lat": -35.5, "lon": -71.0},
+            zoom=7 if opcion_mapa == "Región Metropolitana" else 3.2,
+            mapbox_style="open-street-map",
+            hover_name="NOM_RBD",
+            hover_data={"NOM_COM_RBD": True, "NOM_REG_RBD_A": True, "LATITUD": ":.4f", "LONGITUD": ":.4f"},
+            title=f"Densidad de colegios de procedencia — {opcion_mapa}",
+        )
+        fig.update_layout(height=650, margin=dict(l=0, r=0, t=50, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("El mapa representa la ubicación de los establecimientos escolares asociados a los registros de matrícula, no la residencia de los estudiantes. La densidad puede contar un mismo colegio varias veces si aparece en múltiples matrículas.")
+
+# ============================================================
+# PIE DE PÁGINA
+# ============================================================
+st.divider()
+st.caption("EDA de tesis · Universidad Bernardo O’Higgins · Fuente: base de matrícula y variables de contexto escolar proporcionada para el análisis.")
