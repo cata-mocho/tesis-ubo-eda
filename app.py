@@ -159,7 +159,7 @@ def generar_interpretacion_llm(titulo_grafico, resumen_datos, descripcion_base):
                 st.markdown(f"""
                 **Análisis Estadístico e Interpretación:**
                 * **Diagnóstico de los datos:** En el gráfico **{titulo_grafico}**, los datos reflejan un comportamiento concentrado. {resumen_datos}.
-                * **Implicancia para la Tesis:** La variabilidad observada en esta distribución entrega evidencia empírica directa para el modelado de retención. Diferencias sistemáticas en este atributo sustentan la necesidad de incluirlo como variable predictora o de control en algoritmos de clasificación supervisada.
+                * **Implicancia:** La variabilidad observada en esta distribución entrega evidencia empírica directa para el modelado de retención. Diferencias sistemáticas en este atributo sustentan la necesidad de incluirlo como variable predictora o de control en algoritmos de clasificación supervisada.
                 """)
 
 # ============================================================
