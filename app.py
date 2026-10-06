@@ -163,7 +163,7 @@ def generar_interpretacion_llm(titulo_grafico, resumen_datos, descripcion_base):
                 """)
 
 # ============================================================
-# NAVEGACIÓN INDIVIDUAL POR PÁGINAS (UN GRÁFICO POR PÁGINA)
+# NAVEGACIÓN DIRECTA VISIBLE EN LA PÁGINA PRINCIPAL
 # ============================================================
 paginas = [
     "1. Proporción por Género",
@@ -182,7 +182,20 @@ paginas = [
     "14. Densidad Geográfica de Establecimientos"
 ]
 
-pagina_actual = st.sidebar.selectbox("Seleccionar Página / Gráfico:", paginas)
+# Selector destacado en el centro de la página (no en la barra lateral oculta)
+col_nav1, col_nav2 = st.columns([2, 1])
+with col_nav1:
+    pagina_actual = st.selectbox(
+        "📑 Selecciona el Gráfico / Página a visualizar:",
+        paginas,
+        index=0,
+        help="Elige cualquier gráfico para ver su visualización individual, descripción metodológica y asistente LLM."
+    )
+with col_nav2:
+    st.write("") # Espacio estético
+    st.caption("👈 Cambia aquí de gráfico en cualquier momento.")
+
+st.divider()
 
 if filtrado.empty and pagina_actual != "1. Proporción por Género":
     st.info("No hay registros para los filtros seleccionados.")
