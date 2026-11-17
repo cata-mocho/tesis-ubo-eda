@@ -1,8 +1,0 @@
-streamlit>=1.36,<2.0
-pandas>=2.0,<3.0
-pyarrow>=14.0
-plotly>=5.18,<7.0
-openpyxl>=3.1
-missingno>=0.5.2
-matplotlib>=3.7
-
