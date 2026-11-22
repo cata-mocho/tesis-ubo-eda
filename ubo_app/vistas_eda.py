@@ -394,9 +394,9 @@ VISTAS: list[Vista] = [
     Vista("mapa", "D. Territorio y vulnerabilidad", "Mapa de establecimientos de egreso",
           "¿Dónde están geográficamente los colegios de egreso?",
           "Mapa de calor",
-          "Cada punto es un colegio de egreso. Las zonas con color más intenso concentran más estudiantes "
-          "provenientes de colegios cercanos entre sí. Puedes acercar, alejar o mover el mapa, y cambiar "
-          "entre Todo Chile y la Región Metropolitana.",
+          "Cada punto es un colegio de egreso. Los colores van del amarillo (pocos estudiantes) al rojo "
+          "(muchos estudiantes): mientras más rojo, mayor es la concentración en esa zona. Puedes acercar, "
+          "alejar o mover el mapa, y cambiar entre Todo Chile y la Región Metropolitana.",
           v_mapa, {"cobertura": "Todo Chile"}),
 ]
 
