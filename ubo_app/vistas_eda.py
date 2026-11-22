@@ -278,14 +278,18 @@ def v_mapa(df, p):
         return None, m, ["No hay coordenadas válidas con los filtros actuales."]
     muestra = m.sample(15000, random_state=42) if len(m) > 15000 else m
     rm = cobertura == "Región Metropolitana"
-    kwargs = dict(lat="LATITUD", lon="LONGITUD", radius=10, zoom=8 if rm else 3.5,
+    kwargs = dict(lat="LATITUD", lon="LONGITUD", radius=10 if rm else 6, zoom=8 if rm else 3.5,
                   center={"lat": -33.45, "lon": -70.66} if rm else {"lat": -35.5, "lon": -71.0},
-                  hover_name="NOM_RBD", hover_data={"NOM_COM_RBD": True}, color_continuous_scale="Blues")
+                  hover_name="NOM_RBD", hover_data={"NOM_COM_RBD": True}, color_continuous_scale="YlOrRd")
     if hasattr(px, "density_map"):
         fig = px.density_map(muestra, map_style="open-street-map", **kwargs)
     else:  # plotly < 5.24
         fig = px.density_mapbox(muestra, mapbox_style="open-street-map", **kwargs)
-    fig.update_layout(height=600, margin=dict(l=0, r=0, t=10, b=0))
+    fig.update_layout(
+        height=600,
+        margin=dict(l=0, r=0, t=10, b=0),
+        coloraxis_colorbar=dict(title="Concentración", tickvals=[0, 1], ticktext=["Baja", "Alta"]),
+    )
     t = m.groupby(["NOM_COM_RBD", "NOM_REG_RBD_A"]).agg(Establecimientos=("RBD", "nunique"), Registros=("RBD", "size"))
     t = t.sort_values("Registros", ascending=False).head(20).reset_index().rename(columns={"NOM_COM_RBD": "Comuna", "NOM_REG_RBD_A": "Región"})
     h = [f"Registros georreferenciados: {fmt(len(m))}; establecimientos distintos: {fmt(m['RBD'].nunique())}.",
