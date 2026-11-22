@@ -224,8 +224,15 @@ def _resumen(df: pd.DataFrame, f: pd.DataFrame) -> None:
     st.caption("Las cifras de la cohorte 2025 son estimaciones del modelo: su continuidad aún no se observa.")
 
 
+def _abrir_ficha(id_estudiante: str) -> None:
+    """Se ejecuta al pulsar el botón: fija al estudiante y cambia a la vista de la ficha."""
+    st.session_state["ficha_id"] = id_estudiante
+    st.session_state["ficha_select"] = id_estudiante
+    st.session_state["alerta_vista"] = "Ficha y plan de acompañamiento"
+
+
 def _priorizacion(f: pd.DataFrame) -> None:
-    st.markdown("Listado ordenado por probabilidad estimada. Selecciona una fila para abrir su ficha.")
+    st.markdown("Listado ordenado por probabilidad estimada. Selecciona **una fila** y pulsa el botón para abrir su ficha.")
     cols = ["PRIORIDAD", "ID"] + (["MRUN"] if mostrar_mrun() else []) + [
         "NOMB_CARRERA", "JORNADA", "TRAMO_RIESGO", "PROB_DESERCION", "PERCENTIL_RIESGO_COHORTE",
         "PROM_NOTAS_ALU", "FACTOR_RIESGO_1", "FACTOR_RIESGO_2", "FACTOR_RIESGO_3"]
@@ -244,8 +251,11 @@ def _priorizacion(f: pd.DataFrame) -> None:
     )
     filas = evento.selection.rows if evento and hasattr(evento, "selection") else []
     if filas:
-        st.session_state["ficha_id"] = vista.iloc[filas[0]]["ID"]
-        st.success(f"Seleccionado {st.session_state['ficha_id']}: abre la pestaña «Ficha y plan de acompañamiento».")
+        id_sel = vista.iloc[filas[0]]["ID"]
+        st.button(f"Abrir ficha y plan de acompañamiento de {id_sel}", type="primary",
+                  on_click=_abrir_ficha, args=(id_sel,), key="btn_abrir_ficha")
+    else:
+        st.caption("Selecciona una fila de la tabla para habilitar el botón de la ficha.")
 
     c1, c2 = st.columns(2)
     c1.download_button("Descargar listado priorizado (CSV)", f[[c for c in cols if c != "ID"] + ["ID"]].to_csv(index=False).encode("utf-8-sig"),
@@ -260,11 +270,13 @@ def _priorizacion(f: pd.DataFrame) -> None:
 def _ficha(df: pd.DataFrame, f: pd.DataFrame) -> None:
     base = f if not f.empty else df
     ids = base["ID"].tolist()
-    actual = st.session_state.get("ficha_id")
-    indice = ids.index(actual) if actual in ids else 0
+    # Aseguramos que el valor guardado del selector exista en la lista actual.
+    if st.session_state.get("ficha_select") not in ids:
+        actual = st.session_state.get("ficha_id")
+        st.session_state["ficha_select"] = actual if actual in ids else ids[0]
     etiqueta = {r.ID: f"#{r.PRIORIDAD} · {r.ID} · {r.NOMB_CARRERA} · {pct(r.PROB_DESERCION)} ({r.TRAMO_RIESGO})"
                 for r in base.itertuples()}
-    sel = st.selectbox("Estudiante (ordenados por prioridad)", ids, index=indice, format_func=etiqueta.get, key="ficha_select")
+    sel = st.selectbox("Estudiante (ordenados por prioridad)", ids, format_func=etiqueta.get, key="ficha_select")
     st.session_state["ficha_id"] = sel
     fila = base[base["ID"] == sel].iloc[0]
     pr = ac.pronostico(fila)
@@ -283,7 +295,7 @@ def _ficha(df: pd.DataFrame, f: pd.DataFrame) -> None:
             st.write(f"**MRUN:** {fila['MRUN']}")
         st.caption(f"De cada 100 estudiantes con un perfil similar, se esperaría que unos {pr['de_cada_100']} no continúen.")
     with col2, st.container(border=True):
-        st.markdown("#### Factores que más elevaron su puntaje (SHAP local)")
+        st.markdown("#### Factores que más elevaron su puntaje")
         for dim, factor in ac.dimensiones_estudiante(fila):
             st.markdown(f"- **{factor}** → dimensión *{dim.nombre}*")
         st.caption("Describen cómo el modelo calculó el puntaje, no causas. Los índices IVE e IVM son del colegio o del territorio: confirmar en entrevista.")
@@ -358,17 +370,23 @@ def pagina_alerta() -> None:
     st.title("Sistema de alerta temprana · Cohorte 2025")
     st.caption("Modelo XGBoost de la tesis, reentrenado con 2015–2024 y recalibrado a la tasa 2022–2024. " + PRIVACIDAD)
 
-    tabs = st.tabs(["Resumen de riesgo", "Priorización", "Ficha y plan de acompañamiento", "Catálogo de intervenciones"])
-    with tabs[0]:
+    secciones = ["Resumen de riesgo", "Priorización", "Ficha y plan de acompañamiento", "Catálogo de intervenciones"]
+    seccion = st.radio("Sección", secciones, horizontal=True, key="alerta_vista", label_visibility="collapsed")
+    st.divider()
+
+    if seccion == "Resumen de riesgo":
         if f.empty:
             st.info("No hay estudiantes con los filtros seleccionados.")
         else:
             _resumen(df, f)
-    with tabs[1]:
+    elif seccion == "Priorización":
         _priorizacion(f)
-    with tabs[2]:
-        _ficha(df, f)
-    with tabs[3]:
+    elif seccion == "Ficha y plan de acompañamiento":
+        if f.empty:
+            st.info("No hay estudiantes con los filtros seleccionados.")
+        else:
+            _ficha(df, f)
+    else:
         _catalogo()
 
 
