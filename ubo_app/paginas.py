@@ -338,13 +338,31 @@ def _ficha(df: pd.DataFrame, f: pd.DataFrame) -> None:
 
 
 def _catalogo() -> None:
-    st.markdown("Cada factor del modelo se asocia a una dimensión de apoyo. La intensidad depende del tramo de riesgo.")
+    st.markdown("Cada factor del modelo se asocia a una dimensión de apoyo. Las acciones que se activan dependen del tramo de riesgo.")
     filas = []
     vistos = set()
     for var, dim in ac.MAPA_FACTORES.items():
         filas.append({"Factor del modelo": var, "Dimensión": dim.nombre})
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
+    for dim in ac.MAPA_FACTORES.values():
+        if dim.nombre in vistos:
+            continue
+        vistos.add(dim.nombre)
+        acciones = list(dim.acciones)
+        with st.expander(dim.nombre):
+            st.caption(dim.lectura)
+            st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
+            st.markdown("**Acciones según el tramo**")
+            por_tramo = pd.DataFrame([
+                {"Tramo": "Alto", "Acciones que se activan": " · ".join(acciones)},
+                {"Tramo": "Medio", "Acciones que se activan": " · ".join(acciones[:2])},
+                {"Tramo": "Bajo", "Acciones que se activan": acciones[0] + " (solo si aparece una señal de alerta)"},
+            ])
+            st.dataframe(por_tramo, use_container_width=True, hide_index=True,
+                         key=f"acciones_{dim.nombre}")
+
+    st.markdown("**Intensidad del seguimiento por tramo**")
     intensidad = pd.DataFrame([
         {
             "Tramo": tramo,
@@ -356,20 +374,7 @@ def _catalogo() -> None:
         }
         for tramo, d in ac.INTENSIDAD.items()
     ])
-
-    for dim in ac.MAPA_FACTORES.values():
-        if dim.nombre in vistos:
-            continue
-        vistos.add(dim.nombre)
-        with st.expander(dim.nombre):
-            st.caption(dim.lectura)
-            st.markdown("**Acciones**")
-            st.markdown("\n".join(f"- {a}" for a in dim.acciones))
-            st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
-            st.markdown("**Intensidad del seguimiento según el tramo**")
-            st.dataframe(intensidad, use_container_width=True, hide_index=True,
-                         key=f"intensidad_{dim.nombre}")
-
+    st.dataframe(intensidad, use_container_width=True, hide_index=True)
 
 def pagina_alerta() -> None:
     df = datos.obtener_sat()
