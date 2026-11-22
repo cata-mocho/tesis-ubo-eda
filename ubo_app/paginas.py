@@ -344,6 +344,7 @@ def _catalogo() -> None:
     for var, dim in ac.MAPA_FACTORES.items():
         filas.append({"Factor del modelo": var, "Dimensión": dim.nombre})
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
     for dim in ac.MAPA_FACTORES.values():
         if dim.nombre in vistos:
             continue
@@ -352,7 +353,8 @@ def _catalogo() -> None:
             st.caption(dim.lectura)
             st.markdown("\n".join(f"- {a}" for a in dim.acciones))
             st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
-        st.markdown("**Intensidad por tramo**")
+
+    st.markdown("**Intensidad por tramo**")
     intensidad = pd.DataFrame([
         {
             "Tramo": tramo,
