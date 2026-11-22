@@ -353,7 +353,19 @@ def _catalogo() -> None:
             st.markdown("\n".join(f"- {a}" for a in dim.acciones))
             st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
     st.markdown("**Intensidad por tramo**")
-    st.dataframe(pd.DataFrame(ac.INTENSIDAD).T.rename_axis("Tramo").reset_index(), use_container_width=True, hide_index=True)
+    intensidad = (
+        pd.DataFrame(ac.INTENSIDAD).T
+        .rename_axis("Tramo")
+        .reset_index()
+        .rename(columns={
+            "prioridad": "Prioridad",
+            "modalidad": "Modalidad",
+            "primer_contacto": "Primer contacto",
+            "frecuencia": "Frecuencia",
+            "revision": "Revisión",
+        })
+    )
+    st.dataframe(intensidad, use_container_width=True, hide_index=True)
 
 
 def pagina_alerta() -> None:
