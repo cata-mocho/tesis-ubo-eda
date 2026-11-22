@@ -345,13 +345,17 @@ def _catalogo() -> None:
         filas.append({"Factor del modelo": var, "Dimensión": dim.nombre})
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
+    etiquetas = ["Prioridad alta", "Prioridad media", "Prioridad baja / apoyo general"]
+
     for dim in ac.MAPA_FACTORES.values():
         if dim.nombre in vistos:
             continue
         vistos.add(dim.nombre)
         with st.expander(dim.nombre):
             st.caption(dim.lectura)
-            st.markdown("\n".join(f"- {a}" for a in dim.acciones))
+            st.markdown("\n".join(
+                f"- **{etiquetas[i]}:** {accion}" for i, accion in enumerate(dim.acciones)
+            ))
             st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
 
 def pagina_alerta() -> None:
