@@ -338,7 +338,7 @@ def _ficha(df: pd.DataFrame, f: pd.DataFrame) -> None:
 
 
 def _catalogo() -> None:
-    st.markdown("Cada factor del modelo se asocia a una dimensión de apoyo. Las acciones que se activan dependen del tramo de riesgo.")
+    st.markdown("Cada factor del modelo se asocia a una dimensión de apoyo.")
     filas = []
     vistos = set()
     for var, dim in ac.MAPA_FACTORES.items():
@@ -349,32 +349,10 @@ def _catalogo() -> None:
         if dim.nombre in vistos:
             continue
         vistos.add(dim.nombre)
-        acciones = list(dim.acciones)
         with st.expander(dim.nombre):
             st.caption(dim.lectura)
+            st.markdown("\n".join(f"- {a}" for a in dim.acciones))
             st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
-            st.markdown("**Acciones según el tramo**")
-            por_tramo = pd.DataFrame([
-                {"Tramo": "Alto", "Acciones que se activan": " · ".join(acciones)},
-                {"Tramo": "Medio", "Acciones que se activan": " · ".join(acciones[:2])},
-                {"Tramo": "Bajo", "Acciones que se activan": acciones[0] + " (solo si aparece una señal de alerta)"},
-            ])
-            st.dataframe(por_tramo, use_container_width=True, hide_index=True,
-                         key=f"acciones_{dim.nombre}")
-
-    st.markdown("**Intensidad del seguimiento por tramo**")
-    intensidad = pd.DataFrame([
-        {
-            "Tramo": tramo,
-            "Prioridad": d["prioridad"],
-            "Modalidad": d["modalidad"],
-            "Primer contacto": d["primer_contacto"],
-            "Frecuencia": d["frecuencia"],
-            "Revisión": d["revision"],
-        }
-        for tramo, d in ac.INTENSIDAD.items()
-    ])
-    st.dataframe(intensidad, use_container_width=True, hide_index=True)
 
 def pagina_alerta() -> None:
     df = datos.obtener_sat()
