@@ -26,9 +26,8 @@ class Vista:
     seccion: str
     titulo: str
     pregunta: str
-    muestra: str
-    como_leer: str
-    tesis: str
+    tipo: str            # tipo de gráfico, en lenguaje simple
+    explicacion: str     # texto único para todo público
     construir: Callable[[pd.DataFrame, dict], tuple]
     parametros: dict = field(default_factory=dict)
 
@@ -300,89 +299,103 @@ def v_mapa(df, p):
 VISTAS: list[Vista] = [
     Vista("genero", "A. Composición de la matrícula", "Proporción por género",
           "¿Cómo se distribuye la matrícula entre hombres y mujeres?",
-          "La participación de cada género en la matrícula filtrada.",
-          "Cada sector es la proporción del total; el conteo depende de la unidad elegida en la barra lateral.",
-          "En la tesis, la no continuidad fue 15,0 % en hombres y 11,3 % en mujeres, y el modelo detectó más casos en hombres (recall 0,484 frente a 0,294). El género tuvo baja importancia en SHAP (2,2 %).",
+          "Gráfico de anillo",
+          "El círculo completo representa a todos los estudiantes del filtro actual. Cada porción es la "
+          "parte que corresponde a un género: mientras más grande el sector, mayor su participación. "
+          "El porcentaje de cada sector aparece escrito sobre él.",
           v_genero),
     Vista("evolucion", "A. Composición de la matrícula", "Evolución anual por género",
           "¿Cómo cambió la matrícula en el tiempo?",
-          "La matrícula de cada año, separada por género.",
-          "Cada línea es un género; el eje horizontal es el año de matrícula.",
-          "La tasa de no continuidad cambió entre cohortes: 15–18 % antes de 2020 y 7–10 % después. Por eso la tesis evaluó el modelo prediciendo cohortes futuras (ROC-AUC temporal 0,615).",
+          "Gráfico de líneas",
+          "El eje horizontal muestra los años y el vertical, la cantidad de estudiantes. Cada línea es un "
+          "género: si sube, la matrícula de ese grupo aumentó ese año; si baja, disminuyó. "
+          "Sirve para ver tendencias y comparar el ritmo de cambio entre grupos.",
           v_evolucion),
     Vista("area_genero", "A. Composición de la matrícula", "Matrícula por área y género",
           "¿Qué áreas concentran la matrícula y cómo se compone por género?",
-          "El volumen de cada área del conocimiento, separado por género.",
-          "Barras más largas = más matrícula; los colores muestran la composición por género.",
-          "El área del conocimiento aportó 5,5 % de la importancia SHAP. En Agropecuaria el modelo no detectó ninguno de sus 8 casos de prueba: una brecha inestable por el tamaño del grupo.",
+          "Barras horizontales apiladas",
+          "Cada barra es un área del conocimiento y su largo total indica cuántos estudiantes tiene. "
+          "Los colores dividen cada barra por género, por lo que se ve a la vez qué áreas son más grandes "
+          "y cómo se reparte su matrícula entre hombres y mujeres.",
           v_area_genero),
     Vista("edad", "A. Composición de la matrícula", "Rango de edad al ingreso",
           "¿Qué tan tradicional es el perfil etario de quienes ingresan?",
-          "La distribución de la matrícula por rango de edad al ingreso.",
-          "Las barras siguen el orden de edad; la etiqueta indica el porcentaje del total.",
-          "La no continuidad aumentó con la edad: 10,7 % (15–19), 13,8 % (20–24) y 19,7 % (25–29). Coincide con los perfiles no tradicionales de Bean y Metzner (1985).",
+          "Gráfico de barras verticales",
+          "Cada barra corresponde a un tramo de edad al momento de ingresar, ordenados de menor a mayor. "
+          "Mientras más alta la barra, más estudiantes hay en ese tramo; el porcentaje sobre cada barra "
+          "indica qué parte del total representa.",
           v_edad),
     Vista("top_carreras", "B. Carreras y jornadas", "Carreras con mayor matrícula",
           "¿Qué carreras concentran a la mayoría de los estudiantes?",
-          "Las carreras con más matrícula en el filtro actual.",
-          "Ordenadas de mayor a menor; elige cuántas mostrar.",
-          "La carrera fue la 5.ª variable en importancia SHAP (7,6 %). Las carreras grandes concentran el mayor número absoluto de alertas aunque su tasa no sea la más alta.",
+          "Barras horizontales (ranking)",
+          "Las carreras están ordenadas de mayor a menor número de estudiantes. El largo de cada barra es "
+          "su matrícula y el número a su lado es el valor exacto. Puedes elegir cuántas carreras mostrar "
+          "sobre el gráfico.",
           v_top_carreras, {"top_n": 15}),
     Vista("vespertina", "B. Carreras y jornadas", "Carreras en jornada vespertina",
           "¿Dónde se concentran los estudiantes vespertinos?",
-          "Las 10 carreras con más estudiantes en jornada vespertina y qué parte de la carrera representan.",
-          "La longitud es el volumen vespertino; la etiqueta, el porcentaje de la carrera en esa jornada.",
-          "La jornada vespertina tuvo 26,1 % de no continuidad frente a 11,1 % en diurna y fue la 4.ª variable SHAP (10,1 %). Con un umbral único, el 89 % de los vespertinos recibe alerta.",
+          "Barras horizontales (ranking)",
+          "Muestra las 10 carreras con más estudiantes en jornada vespertina. El largo de la barra es la "
+          "cantidad de estudiantes vespertinos y la etiqueta indica qué porcentaje de la carrera "
+          "representan: una carrera puede tener pocos vespertinos en número, pero ser mayoritaria en esa jornada.",
           v_vespertina),
     Vista("adultos", "B. Carreras y jornadas", "Carreras con ingreso de 25 años o más",
           "¿Qué carreras reciben más estudiantes adultos?",
-          "El porcentaje de estudiantes de 25 años o más en cada carrera (carreras con al menos 30 registros).",
-          "Ordenadas por porcentaje, no por volumen.",
-          "El rango de edad tuvo 3,6 % de importancia SHAP; el recall fue 0,679 en 25–29 años frente a 0,232 en 15–19.",
+          "Barras horizontales (ranking por porcentaje)",
+          "Cada barra indica qué porcentaje de los estudiantes de una carrera ingresó con 25 años o más. "
+          "El orden es por porcentaje y no por cantidad, y solo se incluyen carreras con al menos 30 "
+          "registros para evitar porcentajes poco confiables.",
           v_adultos),
     Vista("rezago", "C. Trayectoria escolar", "Distribución del rezago",
           "¿Cuántos años pasan entre el egreso de media y el ingreso a la UBO?",
-          "La distribución del rezago (año de matrícula menos año de egreso de media).",
-          "Cada barra es un número de años; se omiten los valores sobre 20 años en el gráfico, no en los indicadores.",
-          "El rezago fue la 2.ª variable más importante del modelo (10,6 % de SHAP), con una relación no lineal con el riesgo.",
+          "Histograma",
+          "El rezago es el tiempo entre terminar la enseñanza media y entrar a la universidad. Cada barra "
+          "agrupa a los estudiantes con el mismo número de años; mientras más alta, más estudiantes. "
+          "Las barras cercanas a cero corresponden a quienes ingresan de inmediato. El gráfico omite "
+          "rezagos sobre 20 años, pero los indicadores sí los consideran.",
           v_rezago),
     Vista("rezago_area", "C. Trayectoria escolar", "Rezago por área del conocimiento",
           "¿Qué áreas reciben estudiantes con más años fuera del sistema?",
-          "La dispersión del rezago en cada área, con sus valores atípicos.",
-          "La línea central de cada caja es la mediana; los puntos, los casos extremos.",
-          "Rezago y área son predictores del modelo; su combinación ayuda a identificar perfiles no tradicionales.",
+          "Diagrama de cajas",
+          "Cada caja resume el rezago de un área: la línea del medio es la mediana (el valor central), la "
+          "caja contiene al 50 % central de los estudiantes y los puntos aislados son casos extremos. "
+          "Una caja más alta indica estudiantes que tardaron más años en ingresar.",
           v_rezago_area),
     Vista("rezago_entorno", "C. Trayectoria escolar", "Rezago según entorno escolar",
           "¿Los egresados de colegios rurales tardan más en ingresar?",
-          "El rezago promedio de egresados de colegios urbanos y rurales.",
-          "Compara alturas, pero revisa n: el grupo rural es pequeño.",
-          "En la prueba solo hubo 8 casos rurales de no continuidad, por lo que sus métricas son inestables (recall 0,125, IC 0,02–0,47).",
+          "Gráfico de barras",
+          "Compara el rezago promedio, en años, entre estudiantes de colegios urbanos y rurales. "
+          "Conviene revisar la cantidad de casos (n) de cada grupo: cuando uno es muy pequeño, su promedio "
+          "puede variar mucho y debe leerse con cautela.",
           v_rezago_entorno),
     Vista("entorno", "D. Territorio y vulnerabilidad", "Entorno del establecimiento de egreso",
           "¿Qué parte de los estudiantes viene de colegios rurales?",
-          "La proporción de egresados de establecimientos urbanos y rurales.",
-          "Cada sector es la proporción del total.",
-          "La ruralidad del establecimiento se usó como contexto del modelo; su brecha de recall (0,248) descansa en pocos casos.",
+          "Gráfico de anillo",
+          "El círculo completo representa a todos los estudiantes del filtro actual y cada sector, la "
+          "parte que egresó de un colegio urbano o rural. Mientras más grande el sector, mayor su peso.",
           v_entorno),
     Vista("ivm_region", "D. Territorio y vulnerabilidad", "Vulnerabilidad regional (IVM)",
           "¿Desde qué regiones llegan estudiantes de contextos más vulnerables?",
-          "El IVM regional promedio de los estudiantes según la región de su colegio.",
-          "Puntaje de 0 a 100 de JUNAEB; mayor puntaje indica mayor vulnerabilidad. No es un porcentaje.",
-          "La no continuidad sube de 10,0 % a 15,9 % entre cuartiles del IVM, pero retirar el bloque IVE/IVM no cambió el desempeño del modelo (p = 0,092). Son índices del territorio, no del estudiante (falacia ecológica).",
+          "Barras horizontales",
+          "El Índice de Vulnerabilidad Multidimensional (IVM) de JUNAEB va de 0 a 100: mientras mayor el "
+          "puntaje, más vulnerable es el contexto escolar. Cada barra es el promedio de una región. "
+          "Es un indicador del territorio, no una característica de cada estudiante.",
           v_ivm_region),
     Vista("comunas", "D. Territorio y vulnerabilidad", "Comunas de procedencia",
           "¿Cuál es la zona de influencia territorial de la UBO?",
-          "Las 15 comunas de egreso escolar con más estudiantes.",
-          "Ordenadas por volumen; pasa el cursor para ver la región.",
-          "La comuna del establecimiento aportó 3,9 % de la importancia SHAP y los índices comunales actuaron como ajuste relativo al del colegio.",
+          "Barras horizontales (ranking)",
+          "Muestra las 15 comunas donde estudiaron la enseñanza media la mayor cantidad de estudiantes. "
+          "El largo de la barra es la cantidad de estudiantes; al pasar el cursor se ve la región de la comuna.",
           v_comunas),
     Vista("mapa", "D. Territorio y vulnerabilidad", "Mapa de establecimientos de egreso",
           "¿Dónde están geográficamente los colegios de egreso?",
-          "La densidad de registros según la ubicación del colegio de egreso.",
-          "Zonas más intensas = más estudiantes egresados de colegios cercanos.",
-          "El territorio de origen es parte del enfoque multinivel de vulnerabilidad de la tesis (establecimiento, comuna, provincia, región).",
+          "Mapa de calor",
+          "Cada punto es un colegio de egreso. Las zonas con color más intenso concentran más estudiantes "
+          "provenientes de colegios cercanos entre sí. Puedes acercar, alejar o mover el mapa, y cambiar "
+          "entre Todo Chile y la Región Metropolitana.",
           v_mapa, {"cobertura": "Todo Chile"}),
 ]
+
 
 SECCIONES = list(dict.fromkeys(v.seccion for v in VISTAS))
 POR_ID = {v.id: v for v in VISTAS}
