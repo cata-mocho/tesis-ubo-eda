@@ -371,7 +371,12 @@ def pagina_alerta() -> None:
     st.caption("Modelo XGBoost de la tesis, reentrenado con 2015–2024 y recalibrado a la tasa 2022–2024. " + PRIVACIDAD)
 
     secciones = ["Resumen de riesgo", "Priorización", "Ficha y plan de acompañamiento", "Catálogo de intervenciones"]
-    seccion = st.radio("Sección", secciones, horizontal=True, key="alerta_vista", label_visibility="collapsed")
+    # Valor inicial y protección: el control no debe quedar sin selección.
+    if st.session_state.get("alerta_vista") not in secciones:
+        st.session_state["alerta_vista"] = secciones[0]
+    seccion = st.segmented_control("Sección", secciones, key="alerta_vista", label_visibility="collapsed")
+    if seccion is None:
+        seccion = st.session_state["alerta_vista"] = secciones[0]
     st.divider()
 
     if seccion == "Resumen de riesgo":
