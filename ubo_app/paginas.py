@@ -36,7 +36,6 @@ def pct(x: float, dec: int = 1) -> str:
 # =============================================================================
 def pagina_inicio() -> None:
     st.title(TITULO_APP)
-    st.caption(SUBTITULO_APP)
 
     st.markdown(
         "Esta plataforma acompaña la tesis y tiene dos módulos: un **análisis exploratorio** de la "
@@ -215,13 +214,6 @@ def _resumen(df: pd.DataFrame, f: pd.DataFrame) -> None:
                  hover_data={"Estudiantes": True, "Tasa_esperada": True}, labels={"NOMB_CARRERA": "", "Alto": "Estudiantes en tramo alto"})
     st.plotly_chart(estilo(fig, 460), use_container_width=True)
 
-    factores = pd.concat([f[f"FACTOR_{i}_VAR"] for i in (1, 2, 3)])
-    factores = factores[factores != ""].value_counts().head(10).reset_index()
-    factores.columns = ["Factor", "Estudiantes"]
-    st.markdown("**Factores que más elevan los puntajes en el filtro actual** (entre los tres principales de cada estudiante)")
-    fig = px.bar(factores.sort_values("Estudiantes"), x="Estudiantes", y="Factor", orientation="h", color_discrete_sequence=["#053380"])
-    st.plotly_chart(estilo(fig, 400), use_container_width=True)
-    st.caption("Las cifras de la cohorte 2025 son estimaciones del modelo: su continuidad aún no se observa.")
 
 
 def _abrir_ficha(id_estudiante: str) -> None:
@@ -368,7 +360,6 @@ def pagina_alerta() -> None:
         st.stop()
     f = _filtros_sat(df)
     st.title("Sistema de alerta temprana · Cohorte 2025")
-    st.caption("Modelo XGBoost de la tesis, reentrenado con 2015–2024 y recalibrado a la tasa 2022–2024. " + PRIVACIDAD)
 
     secciones = ["Resumen de riesgo", "Priorización", "Ficha y plan de acompañamiento", "Catálogo de intervenciones"]
     # Valor inicial y protección: el control no debe quedar sin selección.
