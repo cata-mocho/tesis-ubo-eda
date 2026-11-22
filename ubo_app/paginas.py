@@ -82,9 +82,14 @@ def _filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
     genero_sel = sb.multiselect("Género", generos, placeholder="Todos")
     carreras = sorted(df["NOMB_CARRERA"].unique().tolist())
     carreras_sel = sb.multiselect("Carrera", carreras, placeholder="Todas")
-    unidad = sb.radio("Contar", ["registros", "estudiantes"], horizontal=True,
-                      format_func=lambda u: "Registros de matrícula" if u == "registros" else "Estudiantes únicos",
-                      help="Un estudiante puede tener varios registros de matrícula (uno por año).")
+    unidad = sb.radio(
+        "Contar",
+        ["estudiantes", "registros"],
+        index=0,
+        horizontal=True,
+        format_func=lambda u: "Estudiantes únicos" if u == "estudiantes" else "Registros de matrícula",
+    )
+    sb.caption("Un estudiante puede tener varios registros, uno por cada año matriculado.")
 
     f = df[df["CAT_PERIODO"].between(rango[0], rango[1])]
     partes = [f"años {rango[0]}–{rango[1]}"]
