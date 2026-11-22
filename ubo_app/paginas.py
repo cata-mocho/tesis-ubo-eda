@@ -231,6 +231,9 @@ def _priorizacion(f: pd.DataFrame) -> None:
     cols = [c for c in cols if c in f.columns]
     vista = f[cols].reset_index(drop=True)
     vista["PROB_DESERCION"] = (vista["PROB_DESERCION"] * 100).round(2)
+    vista["TRAMO_RIESGO"] = vista["TRAMO_RIESGO"].map(
+        {"Alto": "🔴 Alto", "Medio": "🟡 Medio", "Bajo": "🟢 Bajo"}
+    ).fillna(vista["TRAMO_RIESGO"])
     evento = st.dataframe(
         vista, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="tabla_sat",
         column_config={
