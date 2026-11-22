@@ -345,16 +345,6 @@ def _catalogo() -> None:
         filas.append({"Factor del modelo": var, "Dimensión": dim.nombre})
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
-    for dim in ac.MAPA_FACTORES.values():
-        if dim.nombre in vistos:
-            continue
-        vistos.add(dim.nombre)
-        with st.expander(dim.nombre):
-            st.caption(dim.lectura)
-            st.markdown("\n".join(f"- {a}" for a in dim.acciones))
-            st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
-
-    st.markdown("**Intensidad por tramo**")
     intensidad = pd.DataFrame([
         {
             "Tramo": tramo,
@@ -366,7 +356,19 @@ def _catalogo() -> None:
         }
         for tramo, d in ac.INTENSIDAD.items()
     ])
-    st.dataframe(intensidad, use_container_width=True, hide_index=True)
+
+    for dim in ac.MAPA_FACTORES.values():
+        if dim.nombre in vistos:
+            continue
+        vistos.add(dim.nombre)
+        with st.expander(dim.nombre):
+            st.caption(dim.lectura)
+            st.markdown("**Acciones**")
+            st.markdown("\n".join(f"- {a}" for a in dim.acciones))
+            st.markdown(f"**Responsable:** {dim.responsable}  \n**Indicador:** {dim.indicador}")
+            st.markdown("**Intensidad del seguimiento según el tramo**")
+            st.dataframe(intensidad, use_container_width=True, hide_index=True,
+                         key=f"intensidad_{dim.nombre}")
 
 
 def pagina_alerta() -> None:
