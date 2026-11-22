@@ -54,8 +54,8 @@ def pagina_inicio() -> None:
     with col1, st.container(border=True):
         st.subheader("Módulo 1 · Análisis exploratorio")
         st.write("Catorce vistas organizadas en cuatro secciones: composición de la matrícula, carreras y "
-                 "jornadas, trayectoria escolar, y territorio y vulnerabilidad. Cada vista explica qué "
-                 "muestra, cómo se lee y cómo se relaciona con los resultados de la tesis.")
+                 "jornadas, trayectoria escolar, y territorio y vulnerabilidad. Cada vista indica el tipo de "
+                 "gráfico y explica cómo interpretarlo.")
         st.page_link(st.session_state["_paginas"]["exploracion"], label="Ir al análisis exploratorio", icon=":material/bar_chart:")
     with col2, st.container(border=True):
         st.subheader("Módulo 2 · Alerta temprana 2025")
@@ -99,7 +99,6 @@ def _filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
 
 def pagina_exploracion() -> None:
     df = datos.obtener_eda()
-    llm.panel_configuracion()
     if df is None:
         st.stop()
     filtrado, unidad, texto_filtros = _filtros(df)
@@ -142,10 +141,12 @@ def pagina_exploracion() -> None:
         else:
             st.plotly_chart(fig, use_container_width=True, key=f"fig_{vista.id}")
     with col_l, st.container(border=True):
-        st.markdown(f"**Qué muestra.** {vista.muestra}")
-        st.markdown(f"**Cómo se lee.** {vista.como_leer}")
-        st.markdown(f"**Relación con la tesis.** {vista.tesis}")
+        st.markdown(f"**Tipo de gráfico:** {vista.tipo}")
+        st.divider()
+        st.markdown("**Cómo interpretarlo**")
+        st.markdown(vista.explicacion)
         if fig is not None:
+            st.divider()
             st.markdown("**Con los filtros actuales**")
             st.markdown("\n".join(f"- {h}" for h in hallazgos))
 
@@ -154,8 +155,6 @@ def pagina_exploracion() -> None:
             st.dataframe(tabla, use_container_width=True, hide_index=True)
             st.download_button("Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
                                file_name=f"eda_{vista.id}.csv", mime="text/csv", key=f"dl_{vista.id}")
-        st.markdown("#### Interpretación asistida")
-        llm.bloque_analisis(vista, tabla, hallazgos, texto_filtros)
 
 
 # =============================================================================
